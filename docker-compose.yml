@@ -1,5 +1,54 @@
-# TODO: 4 services: db + 3 node instances
-# Each node needs:
-# - NODE_ID env var (1, 2, 3)
-# - Different port mapping (8081, 8082, 8083)
-# - PEERS env var listing other nodes (e.g., "http://node-2:8080,http://node-3:8080")
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-noderegistry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-noderegistry}
+      POSTGRES_DB: ${POSTGRES_DB:-noderegistry}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-noderegistry}"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  node-1:
+    build: .
+    environment:
+      NODE_ID: 1
+      PEERS: "http://node-2:8080,http://node-3:8080"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-noderegistry}:${POSTGRES_PASSWORD:-noderegistry}@db:5432/${POSTGRES_DB:-noderegistry}
+    ports:
+      - "8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  node-2:
+    build: .
+    environment:
+      NODE_ID: 2
+      PEERS: "http://node-1:8080,http://node-3:8080"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-noderegistry}:${POSTGRES_PASSWORD:-noderegistry}@db:5432/${POSTGRES_DB:-noderegistry}
+    ports:
+      - "8082:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  node-3:
+    build: .
+    environment:
+      NODE_ID: 3
+      PEERS: "http://node-1:8080,http://node-2:8080"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-noderegistry}:${POSTGRES_PASSWORD:-noderegistry}@db:5432/${POSTGRES_DB:-noderegistry}
+    ports:
+      - "8083:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
